@@ -40,14 +40,14 @@ def apply_language_en_us(doc: Document):
             for cell in row.cells:
                 tag_runs(cell)
 
-def remap_headings_except_first(doc: Document, start_level: int):
+def remap_headings(doc: Document, start_level: int):
     delta = max(0, start_level - 1)
-    if delta == 0: return
-    for i, p in enumerate(doc.paragraphs):
-        if i == 0:  # keep the title line
-            continue
+    if delta == 0:
+        return
+    for p in doc.paragraphs:
         s = p.style
-        if not s: continue
+        if not s:
+            continue
         nm = getattr(s, "name", str(s))
         if nm.startswith("Heading "):
             try:
@@ -55,6 +55,7 @@ def remap_headings_except_first(doc: Document, start_level: int):
             except Exception:
                 continue
             p.style = f"Heading {min(9, lvl + delta)}"
+
 
 def bold_italic_to_character_styles(doc: Document, use=True):
     if not use: return
@@ -82,25 +83,29 @@ def try_pandoc_convert(html_str: str, title: str, out_path: Path, reference: Opt
         return True, ""
     except Exception as e:
         return False, str(e)
-
+    
 def fallback_htmldocx(html_body: str, title: str, out_path: Path):
     from htmldocx import HtmlToDocx
     doc = Document()
-    p = doc.add_paragraph(title)
-    try: p.style = "Heading 1"
-    except: pass
-    HtmlToDocx().add_html_to_document(html_body, doc)
-    doc.core_properties.title = title
+    HtmlToDocx().add_html_to_document(html_body or "<p>(empty)</p>", doc)
+    doc.core_properties.title = title or "Converted Document"
     doc.core_properties.language = "en-US"
     apply_language_en_us(doc)
     doc.save(out_path)
 
+
 def build_docx(title: str, body_html: str, start_level: int, strong_emph: bool) -> bytes:
-    if not title: title = "Converted Document"
-    combined_html = f"<h1>{py_html.escape(title)}</h1>\n{body_html or '<p>(empty)</p>'}"
+    if not title:
+        title = "Converted Document"
+    html_for_pandoc = body_html or "<p>(empty)</p>"
     with tempfile.TemporaryDirectory() as td:
         out_path = Path(td) / "out.docx"
-        ok, err = try_pandoc_convert(combined_html, title, out_path, REF_DOCX if REF_DOCX.exists() else None)
+        ok, err = try_pandoc_convert(
+            html_for_pandoc,
+            title,
+            out_path,
+            REF_DOCX if REF_DOCX.exists() else None,
+        )
         if not ok:
             # Pandoc failed; fall back
             fallback_htmldocx(body_html, title, out_path)
@@ -109,7 +114,8 @@ def build_docx(title: str, body_html: str, start_level: int, strong_emph: bool) 
             doc = Document(str(out_path))
 
         if start_level > 1:
-            remap_headings_except_first(doc, start_level)
+            remap_headings(doc, start_level)
+
         if strong_emph:
             bold_italic_to_character_styles(doc, True)
         doc.core_properties.language = "en-US"
