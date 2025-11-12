@@ -6,7 +6,6 @@ import tempfile
 from typing import Optional
 import re
 
-
 from docx import Document
 
 APP_DIR = Path(__file__).parent
@@ -15,67 +14,109 @@ REF_DOCX = APP_DIR / "assets" / "reference.docx"
 st.set_page_config(page_title="HTML → DOCX", page_icon="📄", layout="wide")
 st.title("HTML → DOCX (templated)")
 
-# --- Inputs ---
-title = st.text_input("Document title", value="", placeholder="Enter title…")
-html_body = st.text_area("HTML", value="", height=420, placeholder="Paste raw HTML here…")
-start_level = st.number_input("Demote body headings to start at level", min_value=1, max_value=9, value=1, step=1)
-strong_emph = st.checkbox("Map bold/italic to Word Strong/Emphasis", value=True)
+st.markdown(
+    "Use this form to convert HTML into a DOCX file. "
+    "Fields marked with * are required."
+)
 
-col1, col2 = st.columns([1,1])
-with col1:
-    st.caption("• Title is injected as `<h1>` → Word Heading 1\n"
-               "• Metadata: Title + language = en-US\n"
-               f"• Template: {'found ✅' if REF_DOCX.exists() else 'not found (ok)'}")
+# --- Inputs (in a single form for predictable keyboard behavior) ---
+with st.form("converter_form"):
+    title = st.text_input(
+        "Document title (optional)",
+        value="",
+        help="Used as the Word document title. If left blank, a default title is used."
+    )
+
+    html_body = st.text_area(
+        "HTML source *",
+        value="",
+        height=420,
+        help="Paste the raw HTML you want to convert. This field is required."
+    )
+
+    start_level = st.number_input(
+        "Heading level for first body heading",
+        min_value=1,
+        max_value=9,
+        value=1,
+        step=1,
+        help=(
+            "Use 1 to keep existing heading levels. "
+            "Higher numbers demote all headings "
+            "(for example, 3 makes the first heading “Heading 3”)."
+        )
+    )
+
+    strong_emph = st.checkbox(
+        "Map bold/italic to Word Strong/Emphasis styles",
+        value=True,
+        help="When checked, bold text uses the Strong style and italic text uses Emphasis."
+    )
+
+    col1, col2 = st.columns([1, 1])
+    with col1:
+        st.markdown(
+            "- The document title is stored as metadata.\n"
+            "- The document language is set to `en-US`.\n"
+            f"- Template reference file: {'found' if REF_DOCX.exists() else 'not found (conversion still works)'}"
+        )
+
+    submitted = st.form_submit_button("Convert HTML to DOCX")
 
 def apply_language_en_us(doc: Document):
     ns = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
+
     def tag_runs(container):
         for p in container.paragraphs:
             for r in p.runs:
                 if r._element.rPr is None:
                     r._element._add_rPr()
                 r._element.rPr.set(ns + "lang", "en-US")
+
     tag_runs(doc)
     for tbl in doc.tables:
         for row in tbl.rows:
             for cell in row.cells:
                 tag_runs(cell)
-    def remap_headings(doc: Document, start_level: int):
-        """
-        Remap all paragraph heading styles so that original Heading 1 becomes
-        Heading <start_level>, Heading 2 -> start_level+1, etc.
-    
-        This is robust to style names like 'Heading 2 Char' by extracting the
-        first integer from the style name.
-        """
-        delta = max(0, start_level - 1)
-        if delta == 0:
-            return
-    
-        for p in doc.paragraphs:
-            s = p.style
-            if not s:
-                continue
-    
-            nm = getattr(s, "name", str(s))
-            if not nm.startswith("Heading"):
-                continue
-    
-            # Find first integer in the style name (e.g. 'Heading 2 Char' -> 2)
-            m = re.search(r"(\d+)", nm)
-            if not m:
-                continue
-    
-            lvl = int(m.group(1))
-            new_lvl = min(9, lvl + delta)
-            target_style_name = f"Heading {new_lvl}"
-    
-            try:
-                p.style = target_style_name
-            except KeyError:
-                # If the template doesn't define that heading level, just leave it
-                pass
-            
+
+
+def remap_headings(doc: Document, start_level: int):
+    """
+    Remap all paragraph heading styles so that original Heading 1 becomes
+    Heading <start_level>, Heading 2 -> start_level+1, etc.
+
+    This is robust to style names like 'Heading 2 Char' by extracting the
+    first integer from the style name.
+    """
+    delta = max(0, start_level - 1)
+    if delta == 0:
+        return
+
+    for p in doc.paragraphs:
+        s = p.style
+        if not s:
+            continue
+
+        nm = getattr(s, "name", str(s))
+        if not nm.startswith("Heading"):
+            continue
+
+        # Find first integer in the style name (e.g. 'Heading 2 Char' -> 2)
+        m = re.search(r"(\d+)", nm)
+        if not m:
+            continue
+
+        lvl = int(m.group(1))
+        new_lvl = min(9, lvl + delta)
+        target_style_name = f"Heading {new_lvl}"
+
+        try:
+            p.style = target_style_name
+        except KeyError:
+            # If the template doesn't define that heading level, just leave it
+            pass
+
+
 def normalize_heading_levels(doc: Document):
     """
     Normalize heading levels so that the *smallest* existing heading level
@@ -139,15 +180,21 @@ def normalize_heading_levels(doc: Document):
 
 
 def bold_italic_to_character_styles(doc: Document, use=True):
-    if not use: return
+    if not use:
+        return
     for p in doc.paragraphs:
         for r in p.runs:
             if r.bold:
-                try: r.style = "Strong"
-                except: pass
+                try:
+                    r.style = "Strong"
+                except Exception:
+                    pass
             if r.italic:
-                try: r.style = "Emphasis"
-                except: pass
+                try:
+                    r.style = "Emphasis"
+                except Exception:
+                    pass
+
 
 def try_pandoc_convert(html_str: str, title: str, out_path: Path, reference: Optional[Path]):
     try:
@@ -159,12 +206,18 @@ def try_pandoc_convert(html_str: str, title: str, out_path: Path, reference: Opt
         extra_args = ["--metadata=lang=en-US", f"--metadata=title={title}"]
         if reference and reference.exists():
             extra_args.append(f"--reference-doc={reference}")
-        pypandoc.convert_text(html_str, to="docx", format="html",
-                              outputfile=str(out_path), extra_args=extra_args)
+        pypandoc.convert_text(
+            html_str,
+            to="docx",
+            format="html",
+            outputfile=str(out_path),
+            extra_args=extra_args,
+        )
         return True, ""
     except Exception as e:
         return False, str(e)
-    
+
+
 def fallback_htmldocx(html_body: str, title: str, out_path: Path):
     from htmldocx import HtmlToDocx
     doc = Document()
@@ -219,15 +272,23 @@ def build_docx(title: str, body_html: str, start_level: int, strong_emph: bool) 
         return bio.getvalue()
 
 
-
-if st.button("Convert"):
-    if not title and not html_body:
-        st.warning("Please provide a title or some HTML.")
+# --- Submission handling ---
+if submitted:
+    if not html_body or not html_body.strip():
+        st.error("HTML source is required. Please paste some HTML to convert.")
     else:
         try:
             data = build_docx(title, html_body, int(start_level), bool(strong_emph))
             filename = (title or "Converted Document").strip().replace("/", "-") + ".docx"
-            st.download_button("Download .docx", data=data, file_name=filename, mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
-            st.success("Document ready.")
+            st.download_button(
+                "Download DOCX file",
+                data=data,
+                file_name=filename,
+                mime=(
+                    "application/vnd.openxmlformats-officedocument."
+                    "wordprocessingml.document"
+                ),
+            )
+            st.success("Conversion complete. Use the button above to download your file.")
         except Exception as e:
-            st.error(f"Conversion failed: {e}")
+            st.error(f"Conversion failed. Details: {e}")
