@@ -4,6 +4,7 @@ from pathlib import Path
 import html as py_html
 import tempfile
 from typing import Optional
+import re
 
 
 from docx import Document
@@ -39,23 +40,41 @@ def apply_language_en_us(doc: Document):
         for row in tbl.rows:
             for cell in row.cells:
                 tag_runs(cell)
-
-def remap_headings(doc: Document, start_level: int):
-    delta = max(0, start_level - 1)
-    if delta == 0:
-        return
-    for p in doc.paragraphs:
-        s = p.style
-        if not s:
-            continue
-        nm = getattr(s, "name", str(s))
-        if nm.startswith("Heading "):
-            try:
-                lvl = int(nm.split()[-1])
-            except Exception:
+    def remap_headings(doc: Document, start_level: int):
+        """
+        Remap all paragraph heading styles so that original Heading 1 becomes
+        Heading <start_level>, Heading 2 -> start_level+1, etc.
+    
+        This is robust to style names like 'Heading 2 Char' by extracting the
+        first integer from the style name.
+        """
+        delta = max(0, start_level - 1)
+        if delta == 0:
+            return
+    
+        for p in doc.paragraphs:
+            s = p.style
+            if not s:
                 continue
-            p.style = f"Heading {min(9, lvl + delta)}"
-
+    
+            nm = getattr(s, "name", str(s))
+            if not nm.startswith("Heading"):
+                continue
+    
+            # Find first integer in the style name (e.g. 'Heading 2 Char' -> 2)
+            m = re.search(r"(\d+)", nm)
+            if not m:
+                continue
+    
+            lvl = int(m.group(1))
+            new_lvl = min(9, lvl + delta)
+            target_style_name = f"Heading {new_lvl}"
+    
+            try:
+                p.style = target_style_name
+            except KeyError:
+                # If the template doesn't define that heading level, just leave it
+                pass
 
 def bold_italic_to_character_styles(doc: Document, use=True):
     if not use: return
