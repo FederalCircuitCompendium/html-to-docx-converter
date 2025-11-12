@@ -1,0 +1,6 @@
+streamlit>=1.37
+python-docx==1.1.2
+pypandoc==1.13
+htmldocx==0.0.6
+beautifulsoup4==4.12.3
+html5lib==1.1
