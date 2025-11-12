@@ -76,24 +76,66 @@ def apply_language_en_us(doc: Document):
                 # If the template doesn't define that heading level, just leave it
                 pass
             
-def normalize_top_level_heading(doc: Document):
+def normalize_heading_levels(doc: Document):
     """
-    Ensure that the first actual heading in the doc is Heading 1.
-    Pandoc sometimes maps <h1> to Heading 2 depending on template.
+    Normalize heading levels so that the *smallest* existing heading level
+    becomes Heading 1, and higher levels are shifted up accordingly.
+
+    Example:
+      If the template causes <h1>, <h2>, <h3> to map to Heading 2, 3, 4:
+      - min level = 2
+      - We shift:
+          Heading 2 -> Heading 1
+          Heading 3 -> Heading 2
+          Heading 4 -> Heading 3
     """
+    heading_levels = []
+
+    # First pass: collect all heading levels in use
     for p in doc.paragraphs:
-        if p.style and "Heading" in p.style.name:
-            # If the first heading is Heading 2, promote it to Heading 1
-            try:
-                name = p.style.name
-                if name.startswith("Heading"):
-                    import re
-                    m = re.search(r"(\d+)", name)
-                    if m and int(m.group(1)) > 1:
-                        p.style = "Heading 1"
-            except KeyError:
-                pass
-            return  # Only normalize the FIRST heading
+        s = p.style
+        if not s:
+            continue
+        nm = getattr(s, "name", "")
+        if not nm.startswith("Heading"):
+            continue
+        m = re.search(r"(\d+)", nm)
+        if not m:
+            continue
+        heading_levels.append(int(m.group(1)))
+
+    if not heading_levels:
+        return  # no headings to normalize
+
+    min_lvl = min(heading_levels)
+    if min_lvl <= 1:
+        # Already starting at Heading 1 or below; nothing to do.
+        return
+
+    delta = min_lvl - 1  # how much we need to shift up
+
+    # Second pass: shift all headings >= min_lvl up by delta
+    for p in doc.paragraphs:
+        s = p.style
+        if not s:
+            continue
+        nm = getattr(s, "name", "")
+        if not nm.startswith("Heading"):
+            continue
+        m = re.search(r"(\d+)", nm)
+        if not m:
+            continue
+        lvl = int(m.group(1))
+        if lvl < min_lvl:
+            continue  # leave anything "below" the first heading alone
+
+        new_lvl = max(1, lvl - delta)
+        target_style_name = f"Heading {min(new_lvl, 9)}"
+        try:
+            p.style = target_style_name
+        except KeyError:
+            # If that heading level doesn't exist in the template, skip
+            pass
 
 
 def bold_italic_to_character_styles(doc: Document, use=True):
@@ -137,7 +179,7 @@ def build_docx(title: str, body_html: str, start_level: int, strong_emph: bool) 
     if not title:
         title = "Converted Document"
 
-    # Feed Pandoc exactly the body HTML (no extra <h1> wrapper)
+    # Use the body HTML as-is (no injected <h1>)
     html_for_pandoc = body_html or "<p>(empty)</p>"
 
     with tempfile.TemporaryDirectory() as td:
@@ -157,11 +199,10 @@ def build_docx(title: str, body_html: str, start_level: int, strong_emph: bool) 
         else:
             doc = Document(str(out_path))
 
-        # 1) Make sure the first heading in the doc is Heading 1
-        normalize_top_level_heading(doc)
+        # 1) Normalize heading levels so the smallest becomes Heading 1
+        normalize_heading_levels(doc)
 
-        # 2) Optionally bump all heading levels so top-level in HTML maps
-        #    to the requested start_level (e.g., 2 → Heading 2, 3 → Heading 3, etc.)
+        # 2) Then apply the user-chosen starting level (if > 1)
         if start_level > 1:
             remap_headings(doc, start_level)
 
@@ -176,6 +217,7 @@ def build_docx(title: str, body_html: str, start_level: int, strong_emph: bool) 
         bio = BytesIO()
         doc.save(bio)
         return bio.getvalue()
+
 
 
 if st.button("Convert"):
