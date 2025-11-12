@@ -118,14 +118,14 @@ def build_docx(title: str, body_html: str, start_level: int, strong_emph: bool) 
         doc.save(bio)
         return bio.getvalue()
 
-#if st.button("Convert"):
-    #if not title and not html_body:
-        #st.warning("Please provide a title or some HTML.")
-    #else:
-        #try:
-            #data = build_docx(title, html_body, int(start_level), bool(strong_emph))
-            #filename = (title or "Converted Document").strip().replace("/", "-") + ".docx"
-            #st.download_button("Download .docx", data=data, file_name=filename, mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
-            #st.success("Document ready.")
-        #except Exception as e:
-            #st.error(f"Conversion failed: {e}")
+if st.button("Convert"):
+    if not title and not html_body:
+        st.warning("Please provide a title or some HTML.")
+    else:
+        try:
+            data = build_docx(title, html_body, int(start_level), bool(strong_emph))
+            filename = (title or "Converted Document").strip().replace("/", "-") + ".docx"
+            st.download_button("Download .docx", data=data, file_name=filename, mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+            st.success("Document ready.")
+        except Exception as e:
+            st.error(f"Conversion failed: {e}")
