@@ -75,6 +75,26 @@ def apply_language_en_us(doc: Document):
             except KeyError:
                 # If the template doesn't define that heading level, just leave it
                 pass
+            
+def normalize_top_level_heading(doc: Document):
+    """
+    Ensure that the first actual heading in the doc is Heading 1.
+    Pandoc sometimes maps <h1> to Heading 2 depending on template.
+    """
+    for p in doc.paragraphs:
+        if p.style and "Heading" in p.style.name:
+            # If the first heading is Heading 2, promote it to Heading 1
+            try:
+                name = p.style.name
+                if name.startswith("Heading"):
+                    import re
+                    m = re.search(r"(\d+)", name)
+                    if m and int(m.group(1)) > 1:
+                        p.style = "Heading 1"
+            except KeyError:
+                pass
+            return  # Only normalize the FIRST heading
+
 
 def bold_italic_to_character_styles(doc: Document, use=True):
     if not use: return
@@ -116,32 +136,47 @@ def fallback_htmldocx(html_body: str, title: str, out_path: Path):
 def build_docx(title: str, body_html: str, start_level: int, strong_emph: bool) -> bytes:
     if not title:
         title = "Converted Document"
+
+    # Feed Pandoc exactly the body HTML (no extra <h1> wrapper)
     html_for_pandoc = body_html or "<p>(empty)</p>"
+
     with tempfile.TemporaryDirectory() as td:
         out_path = Path(td) / "out.docx"
+
         ok, err = try_pandoc_convert(
             html_for_pandoc,
             title,
             out_path,
             REF_DOCX if REF_DOCX.exists() else None,
         )
+
         if not ok:
-            # Pandoc failed; fall back
+            # Pandoc failed; fall back (using reference.docx as base if present)
             fallback_htmldocx(body_html, title, out_path)
             doc = Document(str(out_path))
         else:
             doc = Document(str(out_path))
 
+        # 1) Make sure the first heading in the doc is Heading 1
+        normalize_top_level_heading(doc)
+
+        # 2) Optionally bump all heading levels so top-level in HTML maps
+        #    to the requested start_level (e.g., 2 → Heading 2, 3 → Heading 3, etc.)
         if start_level > 1:
             remap_headings(doc, start_level)
 
+        # 3) Map bold/italic to Strong/Emphasis if requested
         if strong_emph:
             bold_italic_to_character_styles(doc, True)
+
+        # 4) Set language and save to bytes
         doc.core_properties.language = "en-US"
         apply_language_en_us(doc)
+
         bio = BytesIO()
         doc.save(bio)
         return bio.getvalue()
+
 
 if st.button("Convert"):
     if not title and not html_body:
