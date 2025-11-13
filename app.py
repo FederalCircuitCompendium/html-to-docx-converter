@@ -237,6 +237,28 @@ def fallback_htmldocx(html_body: str, title: str, out_path: Path):
     apply_language_en_us(doc)
     doc.save(out_path)
 
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+    
+def center_paragraphs_before_first_heading(doc: Document):
+    """
+    Centers ALL paragraphs that occur before the first Heading 1
+    (or any heading level) in the document.
+    """
+    found_heading = False
+
+    for p in doc.paragraphs:
+        style_name = getattr(p.style, "name", "")
+
+        # Detect first heading of ANY level (Heading 1, Heading 2, etc.)
+        if style_name.startswith("Heading"):
+            found_heading = True
+            break
+
+        # Before the first heading → center-align
+        if p.text.strip():   # only center real text
+            p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+
+
 
 def build_docx(title: str, body_html: str, start_level: int, strong_emph: bool) -> bytes:
     if not title:
@@ -272,11 +294,14 @@ def build_docx(title: str, body_html: str, start_level: int, strong_emph: bool) 
         # 3) Map bold/italic to Strong/Emphasis if requested
         if strong_emph:
             bold_italic_to_character_styles(doc, True)
-
-
+        
+        # 3.5) Center all paragraphs before the first heading
+        center_paragraphs_before_first_heading(doc)
+        
         # 4) Set language and save to bytes
         doc.core_properties.language = "en-US"
         apply_language_en_us(doc)
+
 
         bio = BytesIO()
         doc.save(bio)
