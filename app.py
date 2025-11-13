@@ -5,8 +5,11 @@ import html as py_html
 import tempfile
 from typing import Optional
 import re
-
 from docx import Document
+from docx.enum.text import WD_ALIGN_PARAGRAPH
+
+
+
 
 APP_DIR = Path(__file__).parent
 REF_DOCX = APP_DIR / "assets" / "reference.docx"
@@ -237,7 +240,6 @@ def fallback_htmldocx(html_body: str, title: str, out_path: Path):
     apply_language_en_us(doc)
     doc.save(out_path)
 
-    from docx.enum.text import WD_ALIGN_PARAGRAPH
     
 def center_paragraphs_before_first_heading(doc: Document):
     """
