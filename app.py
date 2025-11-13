@@ -62,6 +62,46 @@ with st.form("converter_form"):
         )
 
     submitted = st.form_submit_button("Convert HTML to DOCX")
+    
+def add_page_numbers(doc: Document):
+    """
+    Add centered page numbers to the footer of each section.
+    Uses a PAGE field so Word can renumber automatically.
+    """
+    from docx.oxml import OxmlElement
+    from docx.oxml.ns import qn
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+
+    for section in doc.sections:
+        footer = section.footer
+
+        # Reuse first paragraph if it's effectively empty; otherwise add a new one.
+        if footer.paragraphs:
+            paragraph = footer.paragraphs[0]
+            if paragraph.text.strip():
+                paragraph = footer.add_paragraph()
+        else:
+            paragraph = footer.add_paragraph()
+
+        paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+
+        # Add the PAGE field: { PAGE }
+        run = paragraph.add_run()
+
+        fld_begin = OxmlElement("w:fldChar")
+        fld_begin.set(qn("w:fldCharType"), "begin")
+
+        instr_text = OxmlElement("w:instrText")
+        instr_text.set(qn("xml:space"), "preserve")
+        instr_text.text = " PAGE "
+
+        fld_end = OxmlElement("w:fldChar")
+        fld_end.set(qn("w:fldCharType"), "end")
+
+        run._r.append(fld_begin)
+        run._r.append(instr_text)
+        run._r.append(fld_end)
+
 
 def apply_language_en_us(doc: Document):
     ns = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
@@ -263,6 +303,9 @@ def build_docx(title: str, body_html: str, start_level: int, strong_emph: bool) 
         if strong_emph:
             bold_italic_to_character_styles(doc, True)
 
+        # 3.5) Add page numbers in the footer for each section
+        add_page_numbers(doc)
+
         # 4) Set language and save to bytes
         doc.core_properties.language = "en-US"
         apply_language_en_us(doc)
@@ -270,6 +313,7 @@ def build_docx(title: str, body_html: str, start_level: int, strong_emph: bool) 
         bio = BytesIO()
         doc.save(bio)
         return bio.getvalue()
+
 
 
 # --- Submission handling ---
