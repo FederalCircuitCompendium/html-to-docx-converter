@@ -236,14 +236,13 @@ def append_generated_stamp(doc: Document):
     ts = datetime.now(ZoneInfo("America/Chicago"))
     stamp = ts.strftime("This copy was generated on %B %d, %Y at %I:%M %p %Z.")
     stamp = stamp.replace(" 0", " ")
-    p = doc.add_paragraph()
-    p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    r1 = p.add_run("
-")
-    r2 = p.add_run(stamp + " ")
-    r2.italic = True
-    r3 = p.add_run("This timestamp records when this exported DOCX file was created.")
-    r3.italic = True
+p = doc.add_paragraph()
+p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+
+r1 = p.add_run("\n")
+r2 = p.add_run(stamp + " ")
+r2.italic = True
+
 
 
 def try_pandoc_convert(html_str: str, title: str, out_path: Path, reference: Optional[Path]):
