@@ -234,14 +234,16 @@ def append_generated_stamp(doc: Document):
     The stamp is appended at the end of the document content.
     """
     ts = datetime.now(ZoneInfo("America/Chicago"))
-    stamp = ts.strftime("This copy was generated on %B %d, %Y.")
+    stamp = ts.strftime("This copy was generated on %B %d, %Y at %I:%M %p %Z.")
     stamp = stamp.replace(" 0", " ")
     p = doc.add_paragraph()
     p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    r1 = p.add_run("\n")
+    r1 = p.add_run("
+")
     r2 = p.add_run(stamp + " ")
     r2.italic = True
-
+    r3 = p.add_run("This timestamp records when this exported DOCX file was created.")
+    r3.italic = True
 
 
 def try_pandoc_convert(html_str: str, title: str, out_path: Path, reference: Optional[Path]):
@@ -368,7 +370,9 @@ if submitted:
     else:
         try:
             data = build_docx(title, html_body, int(start_level), bool(strong_emph))
-            filename = (title or "Converted Document").strip().replace("/", "-") + ".docx"
+            from datetime import datetime
+            date_str = datetime.now().strftime("%Y-%m-%d")
+            filename = (title or "Converted Document").strip().replace("/", "-") + f"_{date_str}.docx"
             st.download_button(
                 "Download DOCX file",
                 data=data,
