@@ -7,7 +7,7 @@ from typing import Optional
 import re
 from docx import Document
 from docx.enum.text import WD_ALIGN_PARAGRAPH
-
+from docx.shared import RGBColor
 
 
 
@@ -65,7 +65,6 @@ with st.form("converter_form"):
         )
 
     submitted = st.form_submit_button("Convert HTML to DOCX")
-    
 
 
 
@@ -202,6 +201,31 @@ def bold_italic_to_character_styles(doc: Document, use=True):
                     pass
 
 
+def set_accessible_hyperlink_style(doc: Document, color: str = "1F4E79"):
+    """
+    Override the document's hyperlink styling so linked text remains readable
+    and passes contrast checks on a white page.
+
+    This updates the built-in hyperlink character styles used by Word/pandoc/
+    htmldocx instead of trying to restyle every individual hyperlink run.
+    """
+    rgb = RGBColor.from_string(color)
+
+    for style_name in ("Hyperlink", "FollowedHyperlink"):
+        try:
+            style = doc.styles[style_name]
+        except KeyError:
+            continue
+
+        try:
+            font = style.font
+            font.color.rgb = rgb
+            font.underline = True
+        except Exception:
+            # Some templates may have limited style definitions; skip safely.
+            pass
+
+
 def try_pandoc_convert(html_str: str, title: str, out_path: Path, reference: Optional[Path]):
     try:
         import pypandoc
@@ -238,9 +262,9 @@ def fallback_htmldocx(html_body: str, title: str, out_path: Path):
     doc.core_properties.title = title or "Converted Document"
     doc.core_properties.language = "en-US"
     apply_language_en_us(doc)
+    set_accessible_hyperlink_style(doc)
     doc.save(out_path)
 
-    
 def center_paragraphs_before_first_heading(doc: Document):
     """
     Centers ALL paragraphs that occur before the first Heading 1
@@ -296,6 +320,9 @@ def build_docx(title: str, body_html: str, start_level: int, strong_emph: bool) 
         # 3) Map bold/italic to Strong/Emphasis if requested
         if strong_emph:
             bold_italic_to_character_styles(doc, True)
+
+        # 3.2) Make hyperlink text accessible by overriding the built-in styles
+        set_accessible_hyperlink_style(doc)
         
         # 3.5) Center all paragraphs before the first heading
         center_paragraphs_before_first_heading(doc)
