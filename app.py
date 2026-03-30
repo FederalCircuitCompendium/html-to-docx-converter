@@ -229,20 +229,15 @@ def set_accessible_hyperlink_style(doc: Document, color: str = "1F4E79"):
 
 
 def append_generated_stamp(doc: Document):
-    """
-    Add a closing stamp explaining when the document copy was generated.
-    The stamp is appended at the end of the document content.
-    """
     ts = datetime.now(ZoneInfo("America/Chicago"))
     stamp = ts.strftime("This copy was generated on %B %d, %Y at %I:%M %p %Z.")
     stamp = stamp.replace(" 0", " ")
-p = doc.add_paragraph()
-p.alignment = WD_ALIGN_PARAGRAPH.CENTER
 
-r1 = p.add_run("\n")
-r2 = p.add_run(stamp + " ")
-r2.italic = True
+    p = doc.add_paragraph()
+    p.alignment = WD_ALIGN_PARAGRAPH.CENTER
 
+    r2 = p.add_run(stamp + " ")
+    r2.italic = True
 
 
 def try_pandoc_convert(html_str: str, title: str, out_path: Path, reference: Optional[Path]):
