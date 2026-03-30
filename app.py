@@ -267,21 +267,25 @@ def fallback_htmldocx(html_body: str, title: str, out_path: Path):
 
 def center_paragraphs_before_first_heading(doc: Document):
     """
-    Centers ALL paragraphs that occur before the first Heading 1
-    (or any heading level) in the document.
+    Centers ALL paragraphs that occur before the first heading.
+    If no headings exist, do nothing (avoid centering entire doc).
     """
-    found_heading = False
+    first_heading_index = None
 
-    for p in doc.paragraphs:
+    # Find index of first heading
+    for i, p in enumerate(doc.paragraphs):
         style_name = getattr(p.style, "name", "")
-
-        # Detect first heading of ANY level (Heading 1, Heading 2, etc.)
         if style_name.startswith("Heading"):
-            found_heading = True
+            first_heading_index = i
             break
 
-        # Before the first heading → center-align
-        if p.text.strip():   # only center real text
+    # If no headings found, do nothing
+    if first_heading_index is None:
+        return
+
+    # Center only paragraphs before the first heading
+    for p in doc.paragraphs[:first_heading_index]:
+        if p.text.strip():
             p.alignment = WD_ALIGN_PARAGRAPH.CENTER
 
 
